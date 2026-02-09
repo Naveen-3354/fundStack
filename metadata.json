@@ -1,0 +1,5 @@
+{
+  "name": "Mutual Fund & Schemes Admin",
+  "description": "A robust, data-heavy internal admin portal for managing mutual fund portfolios, schemes, and data ingestion processes.",
+  "requestFramePermissions": []
+}
