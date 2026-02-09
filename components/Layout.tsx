@@ -1,13 +1,9 @@
 
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import InstructionConsole from './InstructionConsole';
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
-
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setSidebarOpen] = useState(true);
@@ -84,7 +80,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </header>
 
         <main className="flex-1 overflow-y-auto p-8 relative scroll-smooth bg-slate-50/50">
-          {children}
+          <Outlet />
         </main>
       </div>
     </div>

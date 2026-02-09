@@ -21,33 +21,12 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const apiService = {
   getFundHouses: async (): Promise<FundHouse[]> => {
     try {
+      // Calling the local API. If it fails, we return an empty array (no hardcoded fallback).
       const response = await axios.get<FundHouse[]>('http://localhost:8080/fund-house');
       return response.data;
     } catch (error) {
-      console.error('Axios Fetch Error:', error);
-      // Fallback for demonstration if local API is not running
-      return [
-        {
-            "id": 1,
-            "name": "360 ONE Mutual Fund",
-            "amfiId": "62",
-            "camsKraCode": null,
-            "karvyKraCode": null,
-            "active": true,
-            "imageUrl": null,
-            "fundType": "MF"
-        },
-        {
-            "id": 2,
-            "name": "Aditya Birla Sun Life Mutual Fund",
-            "amfiId": "3",
-            "camsKraCode": null,
-            "karvyKraCode": null,
-            "active": true,
-            "imageUrl": null,
-            "fundType": "MF"
-        }
-      ];
+      console.error('API is unreachable at http://localhost:8080/fund-house');
+      return [];
     }
   },
 
@@ -94,15 +73,11 @@ export const apiService = {
     return newScheme;
   },
 
-  updateFund: async (id: string, updates: Partial<MutualFund>) => {
-    await delay(300);
-    const all = getStored<MutualFund>(STORAGE_KEYS.FUNDS);
-    const index = all.findIndex(f => f.id === id);
-    if (index > -1) {
-      all[index] = { ...all[index], ...updates };
-      setStored(STORAGE_KEYS.FUNDS, all);
-    }
-    return all[index];
+  clearAllData: async () => {
+    await delay(500);
+    localStorage.removeItem(STORAGE_KEYS.FUNDS);
+    localStorage.removeItem(STORAGE_KEYS.SCHEMES);
+    return true;
   },
 
   deleteFund: async (id: string) => {
