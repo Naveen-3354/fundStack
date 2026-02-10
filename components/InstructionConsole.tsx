@@ -1,52 +1,88 @@
-
 import React, { useState } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
 import { apiService } from '../services/apiService';
 import { RiskLevel, SchemeType } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+type Action =
+  | {
+      action: 'CREATE_FUND';
+      data: {
+        name?: string;
+        amcName?: string;
+        category?: string;
+        aum?: number;
+        foundedDate?: string;
+        active?: boolean;
+      };
+    }
+  | {
+      action: 'CREATE_SCHEME';
+      data: {
+        fundName?: string;
+        name?: string;
+        type?: SchemeType;
+        riskLevel?: RiskLevel;
+        nav?: number;
+        expenseRatio?: number;
+        returns1Y?: number;
+        returns3Y?: number;
+      };
+    };
+
+const parseInstruction = (instruction: string): Action[] => {
+  // Supports either strict JSON array of actions, or one simple shorthand command.
+  const trimmed = instruction.trim();
+
+  if (trimmed.startsWith('[')) {
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : [];
+  }
+
+  // Simple fallback command parsing for local/offline mode
+  // Format: fund:<name>,amc:<amc>,category:<category>,aum:<number>
+  if (trimmed.toLowerCase().startsWith('fund:')) {
+    const parts = trimmed.split(',').map((p) => p.trim());
+    const map = new Map<string, string>();
+    parts.forEach((part) => {
+      const [k, ...rest] = part.split(':');
+      if (!k || rest.length === 0) return;
+      map.set(k.toLowerCase(), rest.join(':').trim());
+    });
+
+    return [
+      {
+        action: 'CREATE_FUND',
+        data: {
+          name: map.get('fund') || 'Untitled Fund',
+          amcName: map.get('amc') || 'Generic AMC',
+          category: map.get('category') || 'Equity',
+          aum: Number(map.get('aum') || 0),
+          foundedDate: new Date().toISOString().split('T')[0],
+          active: true,
+        },
+      },
+    ];
+  }
+
+  return [];
+};
 
 const InstructionConsole: React.FC<{ onActionComplete: () => void }> = ({ onActionComplete }) => {
   const [instruction, setInstruction] = useState('');
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' | 'info' } | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const processInstruction = async () => {
     if (!instruction.trim()) return;
     setLoading(true);
-    setMessage({ text: 'Interpreting instruction...', type: 'info' });
+    setMessage({ text: 'Processing instruction locally...', type: 'info' });
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: instruction,
-        config: {
-          systemInstruction: `You are an internal admin assistant for a Mutual Fund app. 
-          Your job is to parse natural language instructions into data creation commands.
-          Available commands:
-          1. CREATE_FUND: name (string), amcName (string), category (string), aum (number), foundedDate (YYYY-MM-DD), active (boolean)
-          2. CREATE_SCHEME: fundId (string, existing or matching new fund name), name (string), type (OPEN_ENDED|CLOSE_ENDED), riskLevel (LOW|MODERATE|HIGH|VERY_HIGH), nav (number), expenseRatio (number), returns1Y (number), returns3Y (number)
-          
-          If the user wants to create a scheme for a fund they just mentioned, note the relationship.
-          Return a JSON array of actions.`,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                action: { type: Type.STRING, enum: ['CREATE_FUND', 'CREATE_SCHEME'] },
-                data: { type: Type.OBJECT }
-              }
-            }
-          }
-        },
-      });
+      const actions = parseInstruction(instruction);
 
-      const actions = JSON.parse(response.text);
-      
       if (!actions || actions.length === 0) {
-        throw new Error("I couldn't identify a clear action from your instruction.");
+        throw new Error(
+          'No valid action found. Provide a JSON action array or shorthand like: fund:HDFC Flexi,amc:HDFC AMC,category:Equity,aum:12000',
+        );
       }
 
       for (const item of actions) {
@@ -57,23 +93,27 @@ const InstructionConsole: React.FC<{ onActionComplete: () => void }> = ({ onActi
             category: item.data.category || 'Equity',
             aum: item.data.aum || 0,
             foundedDate: item.data.foundedDate || new Date().toISOString().split('T')[0],
-            active: item.data.active ?? true
+            active: item.data.active ?? true,
           });
         } else if (item.action === 'CREATE_SCHEME') {
-          // Simplified: We assume fund names might be passed instead of IDs in instructions
-          // Realistically, we'd search for the ID here.
           const currentFunds = await apiService.getFunds(1, 100);
-          const fund = currentFunds.data.find(f => f.name.toLowerCase().includes(item.data.fundName?.toLowerCase()));
-          
+          const fund = currentFunds.data.find((f) =>
+            f.name.toLowerCase().includes(item.data.fundName?.toLowerCase() || ''),
+          );
+
+          if (!fund) {
+            throw new Error('Fund not found for scheme creation. Create fund first or provide a valid fundName.');
+          }
+
           await apiService.createScheme({
-            fundId: fund?.id || '1',
+            fundId: fund.id,
             name: item.data.name || 'Growth Plan',
             type: item.data.type || SchemeType.OPEN_ENDED,
             riskLevel: item.data.riskLevel || RiskLevel.MODERATE,
             nav: item.data.nav || 10,
             expenseRatio: item.data.expenseRatio || 1,
             returns1Y: item.data.returns1Y || 0,
-            returns3Y: item.data.returns3Y || 0
+            returns3Y: item.data.returns3Y || 0,
           });
         }
       }
@@ -91,12 +131,12 @@ const InstructionConsole: React.FC<{ onActionComplete: () => void }> = ({ onActi
 
   return (
     <div className="mt-8 pt-8 border-t border-slate-800 px-3">
-      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">AI Command Console</h4>
+      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Command Console (Offline Mode)</h4>
       <div className="relative group">
         <textarea
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
-          placeholder="e.g., Add a large cap fund for HDFC with 12000 AUM..."
+          placeholder='JSON actions or shorthand: fund:HDFC Flexi,amc:HDFC AMC,category:Equity,aum:12000'
           className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all min-h-[80px] resize-none"
         />
         <button
@@ -117,11 +157,15 @@ const InstructionConsole: React.FC<{ onActionComplete: () => void }> = ({ onActi
         </button>
       </div>
       {message && (
-        <div className={`mt-2 text-[10px] px-2 py-1 rounded flex items-center gap-2 ${
-          message.type === 'success' ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800' :
-          message.type === 'error' ? 'bg-rose-900/30 text-rose-400 border border-rose-800' :
-          'bg-indigo-900/30 text-indigo-400 border border-indigo-800'
-        }`}>
+        <div
+          className={`mt-2 text-[10px] px-2 py-1 rounded flex items-center gap-2 ${
+            message.type === 'success'
+              ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800'
+              : message.type === 'error'
+                ? 'bg-rose-900/30 text-rose-400 border border-rose-800'
+                : 'bg-indigo-900/30 text-indigo-400 border border-indigo-800'
+          }`}
+        >
           <div className={`w-1 h-1 rounded-full ${message.type === 'info' ? 'animate-pulse bg-indigo-400' : 'bg-current'}`}></div>
           {message.text}
         </div>
