@@ -8,7 +8,9 @@ import {
   FundHouse,
   SchemePageResponse,
   SchemeOverview,
-  GroupedMigrationResponse
+  GroupedMigrationResponse,
+  SchemePlanOption,
+  SchemeTransactionDetail
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -45,7 +47,7 @@ export const apiService = {
     try {
       // Use a configurable base URL so dev server proxy or same-origin can avoid CORS.
       // Example: VITE_API_BASE_URL=/api (with Vite proxy) or http://localhost:8080
-      const response = await axios.get<FundHouse[]>(buildApiUrl('/fund-house'));
+      const response = await axios.get<FundHouse[]>(buildApiUrl('/api/fund-house'));
       return response.data;
     } catch (error) {
       console.error('Fund house API request failed (likely CORS or network).');
@@ -57,7 +59,7 @@ export const apiService = {
     try {
       const safeAmfi = encodeURIComponent(amfiId);
       const response = await axios.get<Record<string, unknown>[]>(
-        buildApiUrl(`/scheme/amfi/${safeAmfi}`)
+        buildApiUrl(`/api/fund-house/amfi/${safeAmfi}`)
       );
       return response.data;
     } catch (error) {
@@ -82,7 +84,7 @@ export const apiService = {
       if (params.search) {
         query.set('search', params.search);
       }
-      const url = buildApiUrl(`/scheme/page?${query.toString()}`);
+      const url = buildApiUrl(`/api/scheme/page?${query.toString()}`);
       const response = await axios.get<SchemePageResponse>(url);
       return response.data;
     } catch (error) {
@@ -91,11 +93,24 @@ export const apiService = {
     }
   },
 
+  getSchemeOverviewSync: async (schemeId: string): Promise<SchemeOverview | null> => {
+    try {
+      const safeId = encodeURIComponent(schemeId);
+      const response = await axios.get<SchemeOverview>(
+        buildApiUrl(`/api/scheme-details/${safeId}/overview/sysnc`)
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error(`Scheme overview API request failed for id ${schemeId}.`);
+      return null;
+    }
+  },
+
   getSchemeOverview: async (schemeId: string): Promise<SchemeOverview | null> => {
     try {
       const safeId = encodeURIComponent(schemeId);
       const response = await axios.get<SchemeOverview>(
-        buildApiUrl(`/scheme/${safeId}/overview/sysnc`)
+        buildApiUrl(`/api/scheme-details/${safeId}/overview`)
       );
       return response.data ?? null;
     } catch (error) {
@@ -121,9 +136,35 @@ export const apiService = {
     }
   },
 
+  getSchemePlanOptions: async (schemeId: string): Promise<SchemePlanOption[]> => {
+    try {
+      const safeId = encodeURIComponent(schemeId);
+      const response = await axios.get<SchemePlanOption[]>(
+        buildApiUrl(`/api/scheme-plan/${safeId}/options`)
+      );
+      return response.data ?? [];
+    } catch (error) {
+      console.error(`Scheme plan options API request failed for id ${schemeId}.`);
+      return [];
+    }
+  },
+
+  getSchemeTransactionDetail: async (schemeId: string): Promise<SchemeTransactionDetail | null> => {
+    try {
+      const safeId = encodeURIComponent(schemeId);
+      const response = await axios.get<SchemeTransactionDetail>(
+        buildApiUrl(`/api/transaction-detial/${safeId}`)
+      );
+      return response.data ?? null;
+    } catch (error) {
+      console.error(`Scheme transaction detail API request failed for id ${schemeId}.`);
+      return null;
+    }
+  },
+
   loadSchemeCsv: async (): Promise<boolean> => {
     try {
-      await axios.get(buildApiUrl('/scheme/getschemeCsv'));
+      await axios.get(buildApiUrl('/amfi/getschemeCsv'));
       return true;
     } catch (error) {
       console.error('Scheme CSV load API request failed.');
@@ -133,7 +174,7 @@ export const apiService = {
 
   migrateSchemeByName: async (schemeName: string): Promise<boolean> => {
     try {
-      await axios.post(buildApiUrl('/api/admin/migration/scheme-name'), { schemeName });
+      await axios.post(buildApiUrl('/api/admin/migration/scheme-name'), { value:schemeName });
       return true;
     } catch (error) {
       console.error('Scheme migration API request failed.');

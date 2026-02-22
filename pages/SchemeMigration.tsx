@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/apiService';
 import { GroupedMigrationScheme } from '../types';
+import { log } from 'node:console';
 
 const SchemeMigration: React.FC = () => {
   const [schemes, setSchemes] = useState<GroupedMigrationScheme[]>([]);
@@ -11,6 +12,8 @@ const SchemeMigration: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  
+  const [migratingSchemes, setMigratingSchemes] = useState({});
 
   const fetchGroupedSchemes = async (nextPage: number, nextPageSize: number) => {
     setLoading(true);
@@ -52,18 +55,38 @@ const SchemeMigration: React.FC = () => {
     }
   };
 
-  const handleMigrate = async (schemeName: string, rowKey: string) => {
-    setMigratingKeys(prev => ({ ...prev, [rowKey]: true }));
+  // const handleMigrate = async (schemeName: string, rowKey: string) => {
+  //   setMigratingKeys(prev => ({ ...prev, [rowKey]: true }));
+  //   try {
+  //     await apiService.migrateSchemeByName(schemeName);
+  //   } catch (error) {
+  //     console.error(error);
+  //   } finally {
+  //     setMigratingKeys(prev => ({ ...prev, [rowKey]: false }));
+  //   }
+  // };
+
+  // const isMigrating = Object.values(migratingKeys).some(v => v === true);
+
+  const handleMigrate = async (schemeName) => {
+    setMigratingSchemes((prev) => ({
+      ...prev,
+      [schemeName]: true,
+    }));
+
     try {
+      // 👉 Replace with your actual API call
       await apiService.migrateSchemeByName(schemeName);
+      console.log("Migrated scheme:", schemeName);
     } catch (error) {
-      console.error(error);
+      console.error("Migration failed:", error);
     } finally {
-      setMigratingKeys(prev => ({ ...prev, [rowKey]: false }));
+      setMigratingSchemes((prev) => ({
+        ...prev,
+        [schemeName]: false,
+      }));
     }
   };
-
-  const isMigrating = Object.values(migratingKeys).some(v => v === true);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -118,17 +141,19 @@ const SchemeMigration: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {schemes.map((scheme, schemeIndex) => (
+          {schemes.map((scheme, schemeIndex) => { 
+            const isSchemeMigrating = migratingSchemes[scheme.schemeName] === true;
+            return(
             <div key={`${scheme.schemeName}-${schemeIndex}`} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900">{scheme.schemeName}</h3>
                 <button
-                  key={scheme.id}
-                  onClick={() => handleMigrate(scheme.schemeName, scheme.id)}
-                  disabled={isMigrating}
+                  key={schemeIndex}
+                  onClick={() => handleMigrate(scheme.schemeName)}
+                  disabled={isSchemeMigrating}
                   className="px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {isMigrating ? 'Migrating...' : 'Migrate'}
+                 {isSchemeMigrating ? "Migrating..." : "Migrate"}
                 </button>
               </div>
               <div className="overflow-x-auto">
@@ -162,7 +187,7 @@ const SchemeMigration: React.FC = () => {
                 </table>
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 
